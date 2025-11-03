@@ -1,0 +1,16 @@
+<library path="quadmani_controller">
+  <class name="QuadManiController" type="quadmani_controller.quadmani_controller.QuadManiController" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      RQT GUI plugin for controlling QuadMani robot (Unitree GO1 + K1 Arm)
+    </description>
+    <qtgui>
+      <group>
+        <label>Robot Tools</label>
+      </group>
+      <label>QuadMani Controller</label>
+      <icon type="theme">system-run</icon>
+      <statustip>Control QuadMani robot joints</statustip>
+    </qtgui>
+  </class>
+</library>
+
