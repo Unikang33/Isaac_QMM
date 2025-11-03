@@ -23,17 +23,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'isaac_joint_state_publisher = isaac_sim_bridge.isaac_joint_state_publisher:main',
-            'isaac_joint_command_subscriber = isaac_sim_bridge.isaac_joint_command_subscriber:main',
-            'joint_state_subscriber = isaac_sim_bridge.joint_state_subscriber:main',
-            'joint_state_subscriber_demo = isaac_sim_bridge.joint_state_subscriber_demo:main',
-            'joint_command_publisher_demo = isaac_sim_bridge.joint_command_publisher_demo:main',
-            'home_pose_publisher = isaac_sim_bridge.home_pose_publisher:main',
-            'quadruped_ik_controller = isaac_sim_bridge.quadruped_ik_controller:main',
-            'hip_position_comparison = isaac_sim_bridge.hip_position_comparison:main',
-            'isaac_hip_position_publisher = isaac_sim_bridge.isaac_hip_position_publisher:main',
-            'hip_position_calculator = isaac_sim_bridge.hip_position_calculator:main',
-            'fk_ik_comparison = isaac_sim_bridge.fk_ik_comparison:main',
             'fk_ik_controller = isaac_sim_bridge.fk_ik_controller:main',
         ],
     },
