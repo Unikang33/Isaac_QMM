@@ -1,0 +1,105 @@
+# ROS2 Workspace
+build/
+install/
+log/
+.colcon_install_layout
+.colcon_compile_layout
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CAD and Model Files (Large files)
+*.stl
+*.obj
+*.dae
+*.mesh
+*.ply
+*.x3d
+*.x3dv
+*.3ds
+*.fbx
+*.blend
+*.blend1
+
+# USD/USDA Files (Isaac Sim)
+*.usd
+*.usda
+*.usdc
+*.usdz
+
+# Binary and Large Data Files
+*.pcd
+*.bag
+*.bag.active
+*.bag.info
+*.h5
+*.hdf5
+*.bin
+
+# Images and Videos (if large)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.tiff
+*.tif
+*.bmp
+*.raw
+
+# Compressed Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Log Files
+*.log
+*.out
+*.err
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cache
+
+# Documentation (if large PDFs)
+*.pdf
+
+# Isaac Sim Specific
+*.npy
+*.npz
+*.pkl
+*.pickle
+
+# Gazebo/Simulation
+*.world
+*.sdf.backup
+
