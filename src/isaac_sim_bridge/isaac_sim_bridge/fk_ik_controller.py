@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 FK-IK 기반 Joint Command 컨트롤러
+~/secret_usd/QMM_final.usd 사용
 
 1. 현재 joint state 수신
 2. TF에서 base pose와 foot position 수신
