@@ -3,14 +3,16 @@
 FK-IK 기반 Joint Command 컨트롤러
 
 1. 현재 joint state 수신
-2. FK로 발 끝 위치 계산 (hip 좌표계)
-3. Numerical IK로 joint 값 재계산
+2. TF에서 base pose와 foot position 수신
+3. Analytical IK로 joint 값 계산
 4. 계산된 joint 값을 joint_command 토픽으로 발행
 """
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from tf2_ros import TransformListener, Buffer
+from geometry_msgs.msg import TransformStamped
 import numpy as np
 import math
 from typing import Dict, Tuple, Optional
@@ -40,6 +42,37 @@ class FKIKController(Node):
         # 현재 joint state 저장
         self.current_joint_positions: Dict[str, float] = {}
         
+        # 디버깅 출력 제어
+        self.last_debug_time = 0.0
+        self.debug_interval = 1.0  # 1초마다 출력
+        
+        # TF Buffer와 Listener 생성
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        
+        # TF frame 이름
+        self.world_frame = 'world'
+        self.base_frame = 'base'  # 실제 base frame 이름 (TF tree 확인 결과)
+        
+        # 다리별 hip과 foot frame 이름 (TF에서 사용)
+        self.hip_frames = {
+            'FR': 'FR_hip',
+            'FL': 'FL_hip',
+            'RR': 'RR_hip',
+            'RL': 'RL_hip'
+        }
+        # Foot frame 이름 (여러 가능한 이름 시도, calf는 제외)
+        self.foot_frames = {
+            'FR': ['FR_foot', 'FR_foot_link', 'go1_FR_foot'],
+            'FL': ['FL_foot', 'FL_foot_link', 'go1_FL_foot'],
+            'RR': ['RR_foot', 'RR_foot_link', 'go1_RR_foot'],
+            'RL': ['RL_foot', 'RL_foot_link', 'go1_RL_foot']
+        }
+        
+        # TF에서 받은 실제 hip 위치를 저장 (초기화 후 업데이트)
+        self.hip_positions_body_from_tf = {}
+        self.hip_positions_initialized = False
+        
         # 로봇 파라미터 (GO1 기하학적 파라미터)
         self.hip_offset = 0.08505   # Hip offset from center
         
@@ -60,12 +93,23 @@ class FKIKController(Node):
             'RL': np.array([-0.1881, self.hip_offset, 0.0])
         }
         
-        # Base position (기본값)
-        self.base_position = np.array([0.0, 0.0, 0.33])  # 기본 높이
+        # Base position과 orientation (TF에서 받아옴, 초기값 설정)
+        self.base_position = np.array([0.0, 0.0, 0.33])  # 초기값 (TF 수신 전까지)
         self.base_orientation = np.array([0.0, 0.0, 0.0])  # [roll, pitch, yaw]
+        self.tf_received = False  # TF 수신 플래그
         
-        # Base offset (수정 가능)
-        self.base_z_offset = -0.05  # 5cm 낮아짐 (음수 = 아래)
+        # Base position과 orientation offset (필요시 조정)
+        self.base_position_offset = np.array([0.0, 0.0, -0.1])  # [x, y, z] in meters
+        self.base_orientation_offset = np.array([0.0, 0., 0.0])  # [roll, pitch, yaw] in radians
+        
+        # 목표 base pose (초기 실행 시 한 번만 설정)
+        self.target_base_position = None  # 초기화 시 설정됨
+        self.target_base_orientation = None  # 초기화 시 설정됨
+        self.target_pose_initialized = False  # 목표 pose 초기화 플래그
+        
+        # 목표 foot position (초기 실행 시 한 번만 설정, 각 다리별)
+        self.target_foot_positions_world = {}  # {leg: np.array([x, y, z])}
+        self.target_foot_positions_initialized = False  # 목표 foot position 초기화 플래그
         
         # GO1 조인트 정의
         self.go1_joints = [
@@ -95,16 +139,121 @@ class FKIKController(Node):
         # 명령 발행 임계값 (1도 = 약 0.0175 rad)
         self.joint_diff_threshold = math.radians(1.0)  # 1도
         
-        # 주기적 command 발행을 위한 타이머 (예: 100Hz = 10ms)
-        self.timer = self.create_timer(0.01, self.timer_callback)  # 100Hz
+        # Joint 값 변화량 제한 (한 스텝에서 최대 변화량)
+        self.max_joint_change_per_step = math.radians(2.0)  # 2도/스텝 (10Hz 기준)
+        
+        # 주기적 command 발행을 위한 타이머 (10Hz로 변경하여 부드러운 제어)
+        self.timer = self.create_timer(0.1, self.timer_callback)  # 10Hz
         
         self.get_logger().info('='*60)
         self.get_logger().info('✅ FK-IK Controller 시작됨')
         self.get_logger().info('='*60)
-        self.get_logger().info('  - Joint state → FK → Numerical IK → Joint Command')
-        self.get_logger().info('  - 지속적으로 자세 유지 (100Hz)')
-        self.get_logger().info(f'  - Base Z offset: {self.base_z_offset*100:.1f} cm')
+        self.get_logger().info('  - Joint state → TF → Analytical IK → Joint Command')
+        self.get_logger().info('  - 지속적으로 자세 유지 (10Hz)')
+        self.get_logger().info(f'  - Base position: TF에서 받아옴 ({self.world_frame} → {self.base_frame})')
         self.get_logger().info('='*60)
+    
+    def quaternion_to_euler(self, x, y, z, w):
+        """쿼터니언을 오일러 각도(roll, pitch, yaw)로 변환"""
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+        
+        # Pitch (y-axis rotation)
+        sinp = 2 * (w * y - z * x)
+        if abs(sinp) >= 1:
+            pitch = math.copysign(math.pi / 2, sinp)  # use 90 degrees if out of range
+        else:
+            pitch = math.asin(sinp)
+        
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+        
+        return roll, pitch, yaw
+    
+    def get_tf_position(self, target_frame: str, source_frame: str = 'world', timeout: float = 0.1) -> Optional[np.ndarray]:
+        """TF에서 특정 frame의 world 위치를 가져옴 (재시도 포함)"""
+        try:
+            # 최신 시간 사용
+            transform: TransformStamped = self.tf_buffer.lookup_transform(
+                source_frame,
+                target_frame,
+                rclpy.time.Time()
+            )
+            trans = transform.transform.translation
+            return np.array([trans.x, trans.y, trans.z])
+        except Exception as e:
+            # 재시도: 과거 시간 사용
+            try:
+                transform: TransformStamped = self.tf_buffer.lookup_transform(
+                    source_frame,
+                    target_frame,
+                    rclpy.time.Time(seconds=0)  # 과거 시간 사용
+                )
+                trans = transform.transform.translation
+                return np.array([trans.x, trans.y, trans.z])
+            except Exception:
+                return None
+    
+    def get_tf_position_try_multiple(self, frame_names: list, source_frame: str = 'world') -> tuple[Optional[np.ndarray], Optional[str]]:
+        """여러 frame 이름을 시도하여 TF 위치를 가져옴"""
+        for frame_name in frame_names:
+            pos = self.get_tf_position(frame_name, source_frame)
+            if pos is not None:
+                return pos, frame_name
+        return None, None
+    
+    def update_base_pose_from_tf(self):
+        """TF에서 base pose를 읽어와서 업데이트"""
+        try:
+            # TF 변환 가져오기
+            transform: TransformStamped = self.tf_buffer.lookup_transform(
+                self.world_frame,
+                self.base_frame,
+                rclpy.time.Time()
+            )
+            
+            # Translation (위치)
+            trans = transform.transform.translation
+            self.base_position = np.array([trans.x, trans.y, trans.z])
+            
+            # Rotation (회전) - 쿼터니언을 오일러 각도로 변환
+            rot = transform.transform.rotation
+            roll, pitch, yaw = self.quaternion_to_euler(rot.x, rot.y, rot.z, rot.w)
+            self.base_orientation = np.array([roll, pitch, yaw])
+            
+            if not self.tf_received:
+                self.tf_received = True
+                self.get_logger().info('='*60)
+                self.get_logger().info('✅ TF에서 Base Pose 수신 시작')
+                self.get_logger().info(f'  위치: [{self.base_position[0]:.4f}, {self.base_position[1]:.4f}, {self.base_position[2]:.4f}] m')
+                self.get_logger().info(f'  회전: [{math.degrees(roll):.2f}°, {math.degrees(pitch):.2f}°, {math.degrees(yaw):.2f}°]')
+                self.get_logger().info('='*60)
+            
+            # 목표 base pose 초기화 (처음 한 번만)
+            if not self.target_pose_initialized:
+                # 초기 base pose + offset을 목표로 설정
+                self.target_base_position = self.base_position.copy() + self.base_position_offset
+                self.target_base_orientation = self.base_orientation.copy() + self.base_orientation_offset
+                self.target_pose_initialized = True
+                self.get_logger().info('='*60)
+                self.get_logger().info('🎯 목표 Base Pose 설정 완료')
+                self.get_logger().info(f'  목표 위치: [{self.target_base_position[0]:.4f}, {self.target_base_position[1]:.4f}, {self.target_base_position[2]:.4f}] m')
+                self.get_logger().info(f'  목표 회전: [{math.degrees(self.target_base_orientation[0]):.2f}°, {math.degrees(self.target_base_orientation[1]):.2f}°, {math.degrees(self.target_base_orientation[2]):.2f}°]')
+                self.get_logger().info(f'  Position offset: [{self.base_position_offset[0]:.4f}, {self.base_position_offset[1]:.4f}, {self.base_position_offset[2]:.4f}] m')
+                self.get_logger().info(f'  Orientation offset: [{math.degrees(self.base_orientation_offset[0]):.2f}°, {math.degrees(self.base_orientation_offset[1]):.2f}°, {math.degrees(self.base_orientation_offset[2]):.2f}°]')
+                self.get_logger().info('='*60)
+            
+            return True
+        except Exception as e:
+            # TF가 아직 발행되지 않았거나 변환 실패
+            if not hasattr(self, '_tf_warning_logged'):
+                self.get_logger().debug(f'TF 변환 대기 중: {e}')
+                self._tf_warning_logged = True
+            return False
     
     def rotation_matrix_from_euler(self, roll: float, pitch: float, yaw: float) -> np.ndarray:
         """오일러 각도에서 회전 행렬 계산"""
@@ -127,21 +276,68 @@ class FKIKController(Node):
     
     def calculate_hip_positions_world(self) -> Dict[str, np.ndarray]:
         """
-        World frame 기준으로 hip positions 계산 (base offset 적용)
+        World frame 기준으로 hip positions 계산
         
-        Base position에 z offset을 적용한 후 hip positions를 계산합니다.
+        목표 base pose를 사용하여 hip positions를 계산합니다.
+        TF에서 실제 hip 위치를 받은 경우 그것을 사용하고, 그렇지 않으면 기본값을 사용합니다.
+        목표 base pose는 초기 실행 시 한 번만 설정되고 계속 추종합니다.
         """
-        # Base position에 offset 적용
-        base_position_with_offset = self.base_position.copy()
-        base_position_with_offset[2] += self.base_z_offset  # Z offset 적용
+        # 목표 base pose 사용 (초기 설정된 값)
+        if self.target_pose_initialized:
+            base_pos = self.target_base_position
+            base_orient = self.target_base_orientation
+        else:
+            # 아직 초기화되지 않은 경우 현재 값 + offset 사용
+            base_pos = self.base_position + self.base_position_offset
+            base_orient = self.base_orientation + self.base_orientation_offset
         
-        roll, pitch, yaw = self.base_orientation
+        roll, pitch, yaw = base_orient
         R = self.rotation_matrix_from_euler(roll, pitch, yaw)
         
         hip_positions_world = {}
-        for leg, hip_pos_body in self.hip_positions_body.items():
-            hip_pos_world = base_position_with_offset + R @ hip_pos_body
+        for leg in ['FR', 'FL', 'RR', 'RL']:
+            # TF에서 받은 실제 hip 위치를 우선 사용
+            if self.hip_positions_initialized and leg in self.hip_positions_body_from_tf:
+                hip_pos_body = self.hip_positions_body_from_tf[leg]
+            else:
+                # 기본값 사용
+                hip_pos_body = self.hip_positions_body[leg]
+            
+            hip_pos_world = base_pos + R @ hip_pos_body
             hip_positions_world[leg] = hip_pos_world
+        
+        return hip_positions_world
+    
+    def calculate_hip_positions_world_from_tf(self) -> Dict[str, np.ndarray]:
+        """
+        World frame 기준으로 hip positions 계산 (TF 기반, base pose 변화 대응)
+        
+        매번 TF에서 base → hip 변환을 받아서 계산하므로,
+        base pose가 바뀌어도 항상 최신 값을 사용합니다.
+        """
+        hip_positions_world = {}
+        
+        for leg in ['FR', 'FL', 'RR', 'RL']:
+            hip_frame_name = self.hip_frames.get(leg, f'{leg}_hip')
+            
+            # TF에서 world → hip 변환을 직접 받아서 사용
+            tf_hip_pos_world = self.get_tf_position(hip_frame_name, self.world_frame)
+            
+            if tf_hip_pos_world is not None:
+                # TF에서 직접 받은 hip 위치 사용
+                hip_positions_world[leg] = tf_hip_pos_world
+            else:
+                # TF를 받지 못한 경우 기존 방식 사용 (fallback)
+                roll, pitch, yaw = self.base_orientation
+                R = self.rotation_matrix_from_euler(roll, pitch, yaw)
+                
+                if self.hip_positions_initialized and leg in self.hip_positions_body_from_tf:
+                    hip_pos_body = self.hip_positions_body_from_tf[leg]
+                else:
+                    hip_pos_body = self.hip_positions_body[leg]
+                
+                hip_pos_world = self.base_position + R @ hip_pos_body
+                hip_positions_world[leg] = hip_pos_world
         
         return hip_positions_world
     
@@ -358,21 +554,19 @@ class FKIKController(Node):
     
     def timer_callback(self):
         """타이머 콜백: 주기적으로 joint command 계산 및 조건부 발행"""
+        # TF에서 base pose 업데이트
+        self.update_base_pose_from_tf()
+        
         if self.joint_state_received:
             self.calculate_and_send_joint_command()
     
     def calculate_and_send_joint_command(self):
         """Joint command 계산 및 조건부 발행 (차이가 1도 이상일 때만)"""
         try:
-            # 현재 base position에서 hip positions 계산 (offset 적용 전)
+            # TF에서 받아온 base position과 orientation으로 hip positions 계산
             roll, pitch, yaw = self.base_orientation
             R = self.rotation_matrix_from_euler(roll, pitch, yaw)
-            current_hip_positions_world = {}
-            for leg, hip_pos_body in self.hip_positions_body.items():
-                current_hip_positions_world[leg] = self.base_position + R @ hip_pos_body
-            
-            # Base offset이 적용된 새로운 hip positions 계산
-            new_hip_positions_world = self.calculate_hip_positions_world()
+            hip_positions_world = self.calculate_hip_positions_world()
             
             # GO1 조인트 값 계산
             go1_joint_positions = []
@@ -397,59 +591,170 @@ class FKIKController(Node):
                 current_calf = self.current_joint_positions[calf_joint]
                 current_go1_joints.extend([current_hip, current_thigh, current_calf])
                 
-                # 1. FK로 현재 발 끝 위치 계산 (현재 hip 좌표계 기준)
-                current_foot_pos_hip = self.forward_kinematics_leg(current_hip, current_thigh, current_calf, leg)
+                # ========== FK 검증: TF와 FK 계산값 비교 ==========
+                # TF에서 hip과 foot 위치 가져오기
+                hip_frame_name = self.hip_frames.get(leg, f'{leg}_hip')
+                foot_frame_names = self.foot_frames.get(leg, [f'{leg}_foot'])
                 
-                # 2. 현재 발 끝의 world frame 위치 계산
-                # 현재 hip position 기준으로 world frame 변환
-                current_hip_pos_world = current_hip_positions_world[leg]
-                current_foot_pos_world = current_hip_pos_world + R @ current_foot_pos_hip
+                tf_hip_pos_world = self.get_tf_position(hip_frame_name, self.world_frame)
+                tf_foot_pos_world, actual_foot_frame = self.get_tf_position_try_multiple(foot_frame_names, self.world_frame)
                 
-                # 3. 새로운 hip position (base offset 적용된) 기준으로
-                #    현재 발 끝 world 위치를 새로운 hip 좌표계로 변환
-                new_hip_pos_world = new_hip_positions_world[leg]
-                foot_pos_relative_to_new_hip = current_foot_pos_world - new_hip_pos_world
+                if actual_foot_frame:
+                    foot_frame_name = actual_foot_frame
+                else:
+                    foot_frame_name = foot_frame_names[0] if isinstance(foot_frame_names, list) else foot_frame_names
                 
-                # World frame에서 hip 좌표계로 변환 (회전 역변환)
+                # TF에서 base → hip 변환을 받아서 hip_positions_body 업데이트 (초기화용)
+                base_to_hip_tf = self.get_tf_position(hip_frame_name, self.base_frame)
+                if base_to_hip_tf is not None and not self.hip_positions_initialized:
+                    self.hip_positions_body_from_tf[leg] = base_to_hip_tf.copy()
+                    # 모든 다리의 hip 위치를 받으면 초기화 완료
+                    if len(self.hip_positions_body_from_tf) == 4:
+                        self.hip_positions_initialized = True
+                        self.get_logger().info('='*80)
+                        self.get_logger().info('✅ TF에서 실제 hip 위치를 받아 hip_positions_body 업데이트')
+                        for l, pos in self.hip_positions_body_from_tf.items():
+                            self.get_logger().info(f'  {l}: [{pos[0]:.6f}, {pos[1]:.6f}, {pos[2]:.6f}] m')
+                        self.get_logger().info('='*80)
+                
+                # 목표 base pose 기반으로 계산한 hip position (검증 후 사용)
+                # 목표 base pose 사용 (초기 설정된 값)
+                if self.target_pose_initialized:
+                    target_base_pos = self.target_base_position
+                    target_base_orient = self.target_base_orientation
+                else:
+                    # 아직 초기화되지 않은 경우 현재 값 + offset 사용
+                    target_base_pos = self.base_position + self.base_position_offset
+                    target_base_orient = self.base_orientation + self.base_orientation_offset
+                
+                if self.hip_positions_initialized and leg in self.hip_positions_body_from_tf:
+                    # 초기화된 경우, 목표 base pose와 body frame 위치로 계산
+                    hip_pos_body_actual = self.hip_positions_body_from_tf[leg]
+                    roll, pitch, yaw = target_base_orient
+                    R = self.rotation_matrix_from_euler(roll, pitch, yaw)
+                    calculated_hip_pos_world = target_base_pos + R @ hip_pos_body_actual
+                else:
+                    # 기본값 사용 (이미 목표 base pose가 적용된 hip_positions_world 사용)
+                    calculated_hip_pos_world = hip_positions_world[leg]
+                
+                # 검증: 계산된 hip position과 TF에서 받은 hip position 비교
+                if tf_hip_pos_world is not None:
+                    hip_diff = np.linalg.norm(calculated_hip_pos_world - tf_hip_pos_world)
+                    # 1초마다 출력
+                    current_time = self.get_clock().now().nanoseconds / 1e9
+                    if current_time - self.last_debug_time >= self.debug_interval:
+                        self.get_logger().info(f'{leg} hip: 목표[{calculated_hip_pos_world[0]:.4f}, {calculated_hip_pos_world[1]:.4f}, {calculated_hip_pos_world[2]:.4f}] '
+                                              f'현재TF[{tf_hip_pos_world[0]:.4f}, {tf_hip_pos_world[1]:.4f}, {tf_hip_pos_world[2]:.4f}] '
+                                              f'차이[{hip_diff*1000:.2f}mm]')
+                        if leg == 'RL':  # 마지막 다리 출력 후 시간 업데이트
+                            self.last_debug_time = current_time
+                
+                # 계산된 hip position 사용 (목표 base pose 기반)
+                fk_hip_pos_world = calculated_hip_pos_world
+                
+                # World frame에서 hip 좌표계로 변환을 위한 회전 역행렬
+                # 목표 base pose의 orientation 사용
+                roll, pitch, yaw = target_base_orient
+                R = self.rotation_matrix_from_euler(roll, pitch, yaw)
                 R_inv = R.T  # 회전 행렬의 역행렬 = 전치 행렬
-                foot_pos_new_hip = R_inv @ foot_pos_relative_to_new_hip
                 
-                # 4. IK로 새로운 joint 값 계산 (Analytical IK 우선, 실패 시 Numerical IK)
-                ik_result = None
+                # 목표 foot position 초기화 (처음 한 번만)
+                if tf_foot_pos_world is not None and not self.target_foot_positions_initialized:
+                    self.target_foot_positions_world[leg] = tf_foot_pos_world.copy()
+                    # 모든 다리의 foot 위치를 받으면 초기화 완료
+                    if len(self.target_foot_positions_world) == 4:
+                        self.target_foot_positions_initialized = True
+                        self.get_logger().info('='*80)
+                        self.get_logger().info('🎯 목표 Foot Position 설정 완료')
+                        for l, pos in self.target_foot_positions_world.items():
+                            self.get_logger().info(f'  {l}: [{pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f}] m')
+                        self.get_logger().info('='*80)
                 
-                # 먼저 Analytical IK 시도
-                ik_result = self.analytical_ik_leg(foot_pos_new_hip, leg)
+                # IK를 위한 target 위치 계산
+                # 목표 foot position 사용 (초기 설정된 값)
+                if self.target_foot_positions_initialized and leg in self.target_foot_positions_world:
+                    # 목표 foot position 사용
+                    target_foot_pos_world = self.target_foot_positions_world[leg]
+                    # World frame에서 hip 좌표계로 변환
+                    foot_relative_world = target_foot_pos_world - fk_hip_pos_world
+                    # Hip frame 기준 상대좌표로 변환
+                    foot_pos_hip = R_inv @ foot_relative_world
+                elif tf_foot_pos_world is not None:
+                    # 아직 초기화되지 않은 경우 TF에서 받은 값 사용 (임시)
+                    foot_relative_world = tf_foot_pos_world - fk_hip_pos_world
+                    foot_pos_hip = R_inv @ foot_relative_world
+                else:
+                    # TF를 받지 못한 경우 현재 joint 값 유지
+                    go1_joint_positions.extend([current_hip, current_thigh, current_calf])
+                    if tf_foot_pos_world is None:
+                        self.get_logger().warn(f'⚠️ {leg} 다리: TF에서 foot 위치를 받지 못해 현재 joint 값 유지')
+                    continue
                 
-                # Analytical IK 실패 시 Numerical IK로 폴백
-                if ik_result is None or np.allclose(ik_result, [0.0, 0.0, 0.0]):
-                    initial_guess = (current_hip, current_thigh, current_calf)
-                    ik_result = self.numerical_ik_leg(foot_pos_new_hip, leg, initial_guess=initial_guess)
+                # 4. IK로 새로운 joint 값 계산 (Analytical IK만 사용)
+                ik_result = self.analytical_ik_leg(foot_pos_hip, leg)
                 
                 if ik_result is None or np.allclose(ik_result, [0.0, 0.0, 0.0]):
                     # IK 실패 시 현재 값 사용
                     go1_joint_positions.extend([current_hip, current_thigh, current_calf])
+                    if not hasattr(self, '_ik_warnings_logged'):
+                        self._ik_warnings_logged = {}
+                    if leg not in self._ik_warnings_logged:
+                        self.get_logger().warn(f'{leg}: Analytical IK 실패, 현재 joint 값 유지')
+                        self._ik_warnings_logged[leg] = True
                 else:
                     ik_hip, ik_thigh, ik_calf = ik_result
-                    go1_joint_positions.extend([ik_hip, ik_thigh, ik_calf])
                     
-                    # 현재 값과 IK 해의 차이 확인 (1도 이상 차이 체크)
-                    hip_diff = abs(ik_hip - current_hip)
-                    thigh_diff = abs(ik_thigh - current_thigh)
-                    calf_diff = abs(ik_calf - current_calf)
+                    # Joint 값 변화량 제한 (부드러운 전환)
+                    def limit_joint_change(current, target, max_change):
+                        diff = target - current
+                        if abs(diff) > max_change:
+                            return current + np.sign(diff) * max_change
+                        return target
                     
+                    # Smooth interpolation을 위한 이전 값 저장 (처음 실행 시)
+                    if not hasattr(self, 'previous_joint_positions'):
+                        self.previous_joint_positions = {}
+                    
+                    leg_key = f'{leg}_joints'
+                    if leg_key not in self.previous_joint_positions:
+                        self.previous_joint_positions[leg_key] = {
+                            'hip': current_hip,
+                            'thigh': current_thigh,
+                            'calf': current_calf
+                        }
+                    
+                    # 이전 값 가져오기
+                    prev_hip = self.previous_joint_positions[leg_key]['hip']
+                    prev_thigh = self.previous_joint_positions[leg_key]['thigh']
+                    prev_calf = self.previous_joint_positions[leg_key]['calf']
+                    
+                    # 변화량 제한 적용 (이전 값 기준)
+                    safe_ik_hip = limit_joint_change(prev_hip, ik_hip, self.max_joint_change_per_step)
+                    safe_ik_thigh = limit_joint_change(prev_thigh, ik_thigh, self.max_joint_change_per_step)
+                    safe_ik_calf = limit_joint_change(prev_calf, ik_calf, self.max_joint_change_per_step)
+                    
+                    # 이전 값 업데이트
+                    self.previous_joint_positions[leg_key] = {
+                        'hip': safe_ik_hip,
+                        'thigh': safe_ik_thigh,
+                        'calf': safe_ik_calf
+                    }
+                    
+                    go1_joint_positions.extend([safe_ik_hip, safe_ik_thigh, safe_ik_calf])
+                    
+                    # Joint 차이 계산
+                    hip_diff = abs(safe_ik_hip - current_hip)
+                    thigh_diff = abs(safe_ik_thigh - current_thigh)
+                    calf_diff = abs(safe_ik_calf - current_calf)
+                    
+                    # Joint 차이 확인
                     if (hip_diff > self.joint_diff_threshold or 
                         thigh_diff > self.joint_diff_threshold or 
                         calf_diff > self.joint_diff_threshold):
                         has_significant_change = True
-                        
-                        # 검증: IK 해가 올바른지 확인
-                        verify_foot = self.forward_kinematics_leg(ik_hip, ik_thigh, ik_calf, leg)
-                        verify_error = np.linalg.norm(foot_pos_new_hip - verify_foot)
-                        if verify_error > 0.01:  # 1cm 이상 오차
-                            self.get_logger().warn(f'{leg}: IK 검증 오차={verify_error*1000:.1f}mm')
             
-            # 1도 이상 차이가 있는 경우에만 명령 발행
-            if has_significant_change:
+            # Offset을 반영한 hip에서 발 끝을 이용해 IK를 구한 값을 joint command로 발행
+            if len(go1_joint_positions) == len(self.go1_joints):
                 # K1 조인트 위치 (home position)
                 k1_joint_positions = [self.k1_home_positions[joint] for joint in self.k1_joints]
                 
@@ -467,35 +772,16 @@ class FKIKController(Node):
                 
                 # 발행
                 self.joint_command_publisher.publish(msg)
-                
-                # 결과 출력 (처음 한 번만, 이후에는 debug 레벨)
-                if not hasattr(self, '_first_command'):
-                    self.get_logger().info('='*60)
-                    self.get_logger().info('✅ Joint Command 발행 시작')
-                    self.get_logger().info('='*60)
-                    self.get_logger().info(f'  Base Z offset 적용: {self.base_z_offset*100:.1f} cm')
-                    self.get_logger().info(f'  조정된 Base 높이: {self.base_position[2] + self.base_z_offset:.3f} m')
-                    self.get_logger().info(f'  Joint 차이 임계값: {math.degrees(self.joint_diff_threshold):.1f}도')
-                    self.get_logger().info('  지속적으로 자세 유지 중...')
-                    self.get_logger().info('='*60)
-                    self._first_command = True
-                else:
-                    # 변경된 joint 정보 로그 (debug 레벨)
-                    changes = []
-                    for i, leg in enumerate(leg_names):
-                        idx = i * 3
-                        for j, joint_name in enumerate(['hip', 'thigh', 'calf']):
-                            curr = current_go1_joints[idx + j]
-                            new = go1_joint_positions[idx + j]
-                            diff = abs(new - curr)
-                            if diff > self.joint_diff_threshold:
-                                changes.append(f'{leg}_{joint_name}: {math.degrees(diff):.1f}°')
-                    
-                    if changes:
-                        self.get_logger().debug(f'Joint command 발행 (변경: {", ".join(changes)})')
-            # else:
-            #     # 1도 미만 차이는 발행하지 않음 (로그도 출력하지 않음)
-            #     pass
+            
+            # 첫 실행 시 정보 출력
+            if not hasattr(self, '_control_mode_logged') and self.target_pose_initialized:
+                self.get_logger().info('='*80)
+                self.get_logger().info('✅ 제어 모드: 목표 Base Pose 추종 중 (IK 계산값을 joint command로 발행)')
+                self.get_logger().info('='*80)
+                self.get_logger().info(f'  목표 Base position: [{self.target_base_position[0]:.4f}, {self.target_base_position[1]:.4f}, {self.target_base_position[2]:.4f}] m')
+                self.get_logger().info(f'  목표 Base orientation: [{math.degrees(self.target_base_orientation[0]):.2f}°, {math.degrees(self.target_base_orientation[1]):.2f}°, {math.degrees(self.target_base_orientation[2]):.2f}°]')
+                self.get_logger().info('='*80)
+                self._control_mode_logged = True
                 
         except Exception as e:
             self.get_logger().error(f'Error calculating/sending joint command: {e}')

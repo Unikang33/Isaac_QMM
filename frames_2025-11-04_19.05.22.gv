@@ -1,0 +1,28 @@
+digraph G {
+"world" -> "base"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "FL_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "FR_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "RL_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "RR_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_base_link"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "FL_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "FR_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "RL_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "RR_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link1"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "FL_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "FR_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "RL_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "RR_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link2"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link3"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link4"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link5"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link6"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link_gripper_left"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+"world" -> "sgr532_link_gripper_right"[label=" Broadcaster: default_authority\nAverage rate: 120.4\nBuffer length: 5.0\nMost recent transform: 972.366717\nOldest transform: 967.366717\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1762250722.8539426"[ shape=plaintext ] ;
+}->"world";
+}

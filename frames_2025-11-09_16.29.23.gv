@@ -1,0 +1,28 @@
+digraph G {
+"world" -> "sgr532_link1"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link1" -> "sgr532_base_link"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link1" -> "sgr532_link2"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_base_link" -> "base"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link2" -> "sgr532_link3"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"base" -> "FL_hip"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"base" -> "FR_hip"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"base" -> "RL_hip"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"base" -> "RR_hip"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link3" -> "sgr532_link4"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"FL_hip" -> "FL_thigh"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"FR_hip" -> "FR_thigh"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"RL_hip" -> "RL_thigh"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"RR_hip" -> "RR_thigh"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link4" -> "sgr532_link5"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"FL_thigh" -> "FL_calf"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"FR_thigh" -> "FR_calf"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"RL_thigh" -> "RL_calf"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"RR_thigh" -> "RR_calf"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link5" -> "sgr532_link6"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link6" -> "sgr532_link_gripper_left"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+"sgr532_link6" -> "sgr532_link_gripper_right"[label=" Broadcaster: default_authority\nAverage rate: 60.2\nBuffer length: 5.0\nMost recent transform: 991.983385\nOldest transform: 986.983385\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1762673363.8206887"[ shape=plaintext ] ;
+}->"world";
+}

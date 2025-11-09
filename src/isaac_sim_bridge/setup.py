@@ -12,7 +12,6 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', glob('launch/*.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,6 +23,10 @@ setup(
     entry_points={
         'console_scripts': [
             'fk_ik_controller = isaac_sim_bridge.fk_ik_controller:main',
+            'tf_pose_listener = isaac_sim_bridge.tf_pose_listener:main',
+            'home_position_controller = isaac_sim_bridge.home_position_controller:main',
+            'check_home_position = isaac_sim_bridge.check_home_position:main',
+            'joint_command_publisher = isaac_sim_bridge.joint_command_publisher:main',
         ],
     },
 )

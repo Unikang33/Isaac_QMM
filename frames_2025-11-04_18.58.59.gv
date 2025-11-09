@@ -1,0 +1,28 @@
+digraph G {
+"world" -> "base"[label=" Broadcaster: default_authority\nAverage rate: 60.199\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "FL_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "FR_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "RL_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "RR_hip"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_base_link"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "FL_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "FR_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "RL_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "RR_thigh"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link1"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "FL_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "FR_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "RL_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "RR_calf"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link2"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link3"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link4"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link5"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link6"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link_gripper_left"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+"world" -> "sgr532_link_gripper_right"[label=" Broadcaster: default_authority\nAverage rate: 120.399\nBuffer length: 5.017\nMost recent transform: 590.783364\nOldest transform: 585.766697\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1762250339.9104393"[ shape=plaintext ] ;
+}->"world";
+}
