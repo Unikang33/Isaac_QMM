@@ -7,8 +7,8 @@ QuadMani 로봇 (Unitree GO1 + K1 Arm) 제어를 위한 ROS2 워크스페이스�
 ```
 kiro_ws/
 ├── src/
-│   ├── quadmani_controller/      # RQT 플러그인 (심볼릭 링크)
-│   └── isaac_sim_bridge/         # Isaac Sim ROS2 브리지 (심볼릭 링크)
+│   ├── quadmani_controller/      # RQT 플러그인
+│   └── isaac_sim_bridge/         # Isaac Sim ROS2 브리지
 ├── build/                        # 빌드 파일
 ├── install/                      # 설치 파일
 └── log/                          # 빌드 로그
@@ -16,24 +16,7 @@ kiro_ws/
 
 ## 빠른 시작
 
-### 1. 워크스페이스 설정 (최초 1회)
-
-프로젝트 루트에서 실행:
-```bash
-cd /home/oem/unitree_quadmani
-chmod +x setup_kiro_ws.sh
-./setup_kiro_ws.sh
-```
-
-또는 수동으로:
-```bash
-mkdir -p ~/kiro_ws/src
-cd ~/kiro_ws/src
-ln -sf /home/oem/unitree_quadmani/quadmani_controller .
-ln -sf /home/oem/unitree_quadmani/isaac_sim_bridge .
-```
-
-### 2. 패키지 빌드
+### 1. 패키지 빌드
 
 ```bash
 cd ~/kiro_ws
@@ -47,17 +30,27 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-### 3. 데모 실행
+### 2. 데모 실행
 
 ```bash
-cd /home/oem/unitree_quadmani
+cd ~/kiro_ws
 
 # 조인트 상태 구독 데모
-chmod +x run_demo.sh
 ./run_demo.sh subscriber
 
 # 또는 조인트 명령 퍼블리시 데모
 ./run_demo.sh publisher
+```
+
+또는 `ros2 run` 명령어로 직접 실행:
+```bash
+source ~/kiro_ws/install/setup.bash
+
+# 조인트 상태 구독
+ros2 run isaac_sim_bridge joint_state_subscriber_demo
+
+# 조인트 명령 퍼블리시
+ros2 run isaac_sim_bridge joint_command_publisher_demo
 ```
 
 ## 패키지 목록
@@ -67,13 +60,25 @@ RQT 플러그인으로 20개 조인트를 GUI로 제어할 수 있습니다.
 
 **실행:**
 ```bash
+cd ~/kiro_ws
+./run_quadmani_controller.sh
+```
+
+또는 직접 실행:
+```bash
 source ~/kiro_ws/install/setup.bash
 rqt --force-discover --standalone quadmani_controller
 ```
 
+**기능:**
+- 20개 조인트 제어 (GO1 12개 + K1 Arm 8개)
+- 실시간 슬라이더 제어
+- 프리셋 포지션 (홈 포지션, 제로 포지션)
+- 조인트 한계값 자동 적용
+
 **토픽:**
-- 퍼블리시: `/quadmani/joint_commands`
-- 구독: `/joint_states`
+- 퍼블리시: `/joint_command` (sensor_msgs/JointState)
+- 구독: `/joint_states` (sensor_msgs/JointState)
 
 ### 2. isaac_sim_bridge
 Isaac Sim과 ROS2를 연동하는 브리지 패키지입니다.
@@ -111,22 +116,22 @@ isaac-sim  # 또는 Isaac Sim 실행
 **터미널 2**: 조인트 상태 구독
 ```bash
 export ROS_DOMAIN_ID=0
-cd /home/oem/unitree_quadmani
+cd ~/kiro_ws
 ./run_demo.sh subscriber
 ```
 
 **터미널 3**: 조인트 명령 퍼블리시
 ```bash
 export ROS_DOMAIN_ID=0
-cd /home/oem/unitree_quadmani
+cd ~/kiro_ws
 ./run_demo.sh publisher
 ```
 
 **터미널 4**: RQT Controller (선택)
 ```bash
 export ROS_DOMAIN_ID=0
-source ~/kiro_ws/install/setup.bash
-rqt --force-discover --standalone quadmani_controller
+cd ~/kiro_ws
+./run_quadmani_controller.sh
 ```
 
 ## 환경 설정

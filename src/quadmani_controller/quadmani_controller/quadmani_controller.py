@@ -266,16 +266,24 @@ class QuadManiController(Plugin):
     @Slot()
     def publish_joint_commands(self):
         """현재 조인트 위치를 퍼블리시"""
-        msg = JointState()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.name = self.all_joints
-        msg.position = [self.current_positions[joint] for joint in self.all_joints]
-        msg.velocity = []
-        msg.effort = []
+        # ROS2 컨텍스트 유효성 확인
+        if not rclpy.ok():
+            self._node.get_logger().warn('ROS2 컨텍스트가 유효하지 않습니다. 명령을 전송할 수 없습니다.')
+            return
         
-        self.joint_cmd_pub.publish(msg)
-        self._node.get_logger().info(
-            f'조인트 명령을 전송했습니다: {len(msg.name)}개 조인트')
+        try:
+            msg = JointState()
+            msg.header.stamp = self._node.get_clock().now().to_msg()
+            msg.name = self.all_joints
+            msg.position = [self.current_positions[joint] for joint in self.all_joints]
+            msg.velocity = []
+            msg.effort = []
+            
+            self.joint_cmd_pub.publish(msg)
+            self._node.get_logger().info(
+                f'조인트 명령을 전송했습니다: {len(msg.name)}개 조인트')
+        except Exception as e:
+            self._node.get_logger().error(f'조인트 명령 전송 실패: {str(e)}')
     
     def shutdown_plugin(self):
         """플러그인 종료"""

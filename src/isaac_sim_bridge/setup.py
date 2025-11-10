@@ -27,6 +27,8 @@ setup(
             'home_position_controller = isaac_sim_bridge.home_position_controller:main',
             'check_home_position = isaac_sim_bridge.check_home_position:main',
             'joint_command_publisher = isaac_sim_bridge.joint_command_publisher:main',
+            'joint_state_subscriber_demo = isaac_sim_bridge.joint_state_subscriber_demo:main',
+            'joint_command_publisher_demo = isaac_sim_bridge.joint_command_publisher_demo:main',
         ],
     },
 )
