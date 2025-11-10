@@ -46,8 +46,11 @@ Thumbs.db
 *.usda
 *.usdc
 *.usdz
-# Exception: Allow QMM_final.usd in assets directory
-!src/isaac_sim_bridge/assets/QMM_final.usd
+# Exception: Allow all USD files in assets directory
+!src/isaac_sim_bridge/assets/**/*.usd
+!src/isaac_sim_bridge/assets/**/*.usda
+!src/isaac_sim_bridge/assets/**/*.usdc
+!src/isaac_sim_bridge/assets/**/*.usdz
 
 # Binary and Large Data Files
 *.pcd
@@ -57,6 +60,8 @@ Thumbs.db
 *.h5
 *.hdf5
 *.bin
+# Exception: Allow binary files in map directory
+!src/isaac_sim_bridge/map/**/*.bin
 
 # Images and Videos (if large)
 *.mp4
