@@ -99,14 +99,39 @@ class FKIKController(Node):
         self.base_orientation = np.array([0.0, 0.0, 0.0])  # [roll, pitch, yaw]
         self.tf_received = False  # TF 수신 플래그
         
-        # Base position과 orientation offset (필요시 조정)
-        self.base_position_offset = np.array([0.0, 0.0, -0.1])  # [x, y, z] in meters
-        self.base_orientation_offset = np.array([0.0, 0., 0.0])  # [roll, pitch, yaw] in radians
+        # Base position과 orientation offset (시간에 따라 동적으로 변경)
+        self.base_position_offset = np.array([0.0, 0.0, 0.0])  # [x, y, z] in meters
+        self.base_orientation_offset = np.array([0.0, 0.0, 0.0])  # [roll, pitch, yaw] in radians
         
-        # 목표 base pose (초기 실행 시 한 번만 설정)
+        # 시간 기반 offset 시퀀스 제어
+        self.start_time = None  # 제어 시작 시간
+        self.stage_duration = 3.0  # 각 단계 지속 시간 (초)
+        self.current_stage = 0  # 현재 단계
+        self.offset_stages = [
+            # 1. offset 없음 (0-3초)
+            {'pos': [0.0, 0.0, 0.0], 'orient': [0.0, 0.0, 0.0], 'name': 'offset 없음'},
+            # 2. z offset -0.1 (3-6초)
+            {'pos': [0.0, 0.0, -0.1], 'orient': [0.0, 0.0, 0.0], 'name': 'z offset -0.1'},
+            # 3. offset 없음 (6-9초)
+            {'pos': [0.0, 0.0, 0.0], 'orient': [0.0, 0.0, 0.0], 'name': 'offset 없음'},
+            # 4. roll offset 0.2 (9-12초)
+            {'pos': [0.0, 0.0, 0.0], 'orient': [0.2, 0.0, 0.0], 'name': 'roll offset 0.2'},
+            # 5. offset 없음 (12-15초)
+            {'pos': [0.0, 0.0, 0.0], 'orient': [0.0, 0.0, 0.0], 'name': 'offset 없음'},
+            # 6. pitch offset 0.4 (15-18초)
+            {'pos': [0.0, 0.0, 0.0], 'orient': [0.0, 0.4, 0.0], 'name': 'pitch offset 0.4'},
+            # 7. offset 없음 (18-21초)
+            {'pos': [0.0, 0.0, 0.0], 'orient': [0.0, 0.0, 0.0], 'name': 'offset 없음'},
+            # 8. z offset -0.1, roll offset 0.2, pitch offset 0.4 (21-24초)
+            {'pos': [0.0, 0.0, -0.1], 'orient': [0.2, 0.4, 0.0], 'name': 'z offset -0.1, roll offset 0.2, pitch offset 0.4'},
+        ]
+        
+        # 목표 base pose (offset 변경 시 재계산됨)
         self.target_base_position = None  # 초기화 시 설정됨
         self.target_base_orientation = None  # 초기화 시 설정됨
         self.target_pose_initialized = False  # 목표 pose 초기화 플래그
+        self.initial_base_position = None  # 초기 base position 저장
+        self.initial_base_orientation = None  # 초기 base orientation 저장
         
         # 목표 foot position (초기 실행 시 한 번만 설정, 각 다리별)
         self.target_foot_positions_world = {}  # {leg: np.array([x, y, z])}
@@ -234,19 +259,62 @@ class FKIKController(Node):
                 self.get_logger().info(f'  회전: [{math.degrees(roll):.2f}°, {math.degrees(pitch):.2f}°, {math.degrees(yaw):.2f}°]')
                 self.get_logger().info('='*60)
             
-            # 목표 base pose 초기화 (처음 한 번만)
+            # 초기 base pose 저장 (처음 한 번만)
             if not self.target_pose_initialized:
-                # 초기 base pose + offset을 목표로 설정
-                self.target_base_position = self.base_position.copy() + self.base_position_offset
-                self.target_base_orientation = self.base_orientation.copy() + self.base_orientation_offset
+                self.initial_base_position = self.base_position.copy()
+                self.initial_base_orientation = self.base_orientation.copy()
+                self.start_time = self.get_clock().now()
                 self.target_pose_initialized = True
                 self.get_logger().info('='*60)
-                self.get_logger().info('🎯 목표 Base Pose 설정 완료')
-                self.get_logger().info(f'  목표 위치: [{self.target_base_position[0]:.4f}, {self.target_base_position[1]:.4f}, {self.target_base_position[2]:.4f}] m')
-                self.get_logger().info(f'  목표 회전: [{math.degrees(self.target_base_orientation[0]):.2f}°, {math.degrees(self.target_base_orientation[1]):.2f}°, {math.degrees(self.target_base_orientation[2]):.2f}°]')
-                self.get_logger().info(f'  Position offset: [{self.base_position_offset[0]:.4f}, {self.base_position_offset[1]:.4f}, {self.base_position_offset[2]:.4f}] m')
-                self.get_logger().info(f'  Orientation offset: [{math.degrees(self.base_orientation_offset[0]):.2f}°, {math.degrees(self.base_orientation_offset[1]):.2f}°, {math.degrees(self.base_orientation_offset[2]):.2f}°]')
+                self.get_logger().info('🎯 초기 Base Pose 저장 완료')
+                self.get_logger().info(f'  초기 위치: [{self.initial_base_position[0]:.4f}, {self.initial_base_position[1]:.4f}, {self.initial_base_position[2]:.4f}] m')
+                self.get_logger().info(f'  초기 회전: [{math.degrees(self.initial_base_orientation[0]):.2f}°, {math.degrees(self.initial_base_orientation[1]):.2f}°, {math.degrees(self.initial_base_orientation[2]):.2f}°]')
                 self.get_logger().info('='*60)
+            
+            # 시간 기반 offset 업데이트 및 목표 pose 재계산
+            if self.target_pose_initialized and self.start_time is not None:
+                elapsed_time = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
+                stage_index = int(elapsed_time / self.stage_duration)
+                
+                # 현재 단계가 변경되었는지 확인
+                if stage_index != self.current_stage and stage_index < len(self.offset_stages):
+                    self.current_stage = stage_index
+                    stage = self.offset_stages[stage_index]
+                    
+                    # Offset 업데이트
+                    self.base_position_offset = np.array(stage['pos'])
+                    self.base_orientation_offset = np.array(stage['orient'])
+                    
+                    # 목표 pose 재계산 (초기 pose + 현재 offset)
+                    self.target_base_position = self.initial_base_position.copy() + self.base_position_offset
+                    self.target_base_orientation = self.initial_base_orientation.copy() + self.base_orientation_offset
+                    
+                    # 로그 출력
+                    self.get_logger().info('='*60)
+                    self.get_logger().info(f'🔄 단계 {stage_index + 1}/{len(self.offset_stages)}: {stage["name"]}')
+                    self.get_logger().info(f'  경과 시간: {elapsed_time:.2f}초')
+                    self.get_logger().info(f'  Position offset: [{self.base_position_offset[0]:.4f}, {self.base_position_offset[1]:.4f}, {self.base_position_offset[2]:.4f}] m')
+                    self.get_logger().info(f'  Orientation offset: [{math.degrees(self.base_orientation_offset[0]):.2f}°, {math.degrees(self.base_orientation_offset[1]):.2f}°, {math.degrees(self.base_orientation_offset[2]):.2f}°]')
+                    self.get_logger().info(f'  목표 위치: [{self.target_base_position[0]:.4f}, {self.target_base_position[1]:.4f}, {self.target_base_position[2]:.4f}] m')
+                    self.get_logger().info(f'  목표 회전: [{math.degrees(self.target_base_orientation[0]):.2f}°, {math.degrees(self.target_base_orientation[1]):.2f}°, {math.degrees(self.target_base_orientation[2]):.2f}°]')
+                    self.get_logger().info('='*60)
+                elif stage_index >= len(self.offset_stages):
+                    # 모든 단계 완료 후 마지막 단계 유지
+                    if self.current_stage < len(self.offset_stages) - 1:
+                        self.current_stage = len(self.offset_stages) - 1
+                        stage = self.offset_stages[-1]
+                        self.base_position_offset = np.array(stage['pos'])
+                        self.base_orientation_offset = np.array(stage['orient'])
+                        self.target_base_position = self.initial_base_position.copy() + self.base_position_offset
+                        self.target_base_orientation = self.initial_base_orientation.copy() + self.base_orientation_offset
+                        self.get_logger().info('='*60)
+                        self.get_logger().info('✅ 모든 offset 시퀀스 완료, 마지막 단계 유지')
+                        self.get_logger().info('='*60)
+                else:
+                    # 목표 pose 유지 (현재 offset 기반)
+                    if self.initial_base_position is not None:
+                        self.target_base_position = self.initial_base_position.copy() + self.base_position_offset
+                        self.target_base_orientation = self.initial_base_orientation.copy() + self.base_orientation_offset
             
             return True
         except Exception as e:
