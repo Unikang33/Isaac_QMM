@@ -46,6 +46,8 @@ Thumbs.db
 *.usda
 *.usdc
 *.usdz
+# Exception: Allow QMM_final.usd in assets directory
+!src/isaac_sim_bridge/assets/QMM_final.usd
 
 # Binary and Large Data Files
 *.pcd
